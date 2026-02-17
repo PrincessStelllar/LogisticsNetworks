@@ -17,6 +17,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.Slot;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.*;
@@ -36,7 +37,7 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
     private static final int BATCH_MIN = 1;
     private static final int BATCH_MAX = 1_000_000;
     private static final int DELAY_MIN = 1;
-    private static final int DELAY_MAX = 9_999;
+    private static final int DELAY_MAX = 10_000;
     private static final int PRIORITY_MIN = -99;
     private static final int PRIORITY_MAX = 99;
 
@@ -80,7 +81,8 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
         super(menu, inventory, title);
         this.imageWidth = GUI_WIDTH;
         this.imageHeight = GUI_HEIGHT;
-        this.inventoryLabelY = INV_Y - 10;
+        this.inventoryLabelY = 10_000;
+        this.titleLabelY = 10_000;
     }
 
     @Override
@@ -263,7 +265,7 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
         if (node == null)
             return;
 
-        String netName = getNetworkName(node.getNetworkId());
+        String netName = clipToWidth(getNetworkName(node.getNetworkId()), GUI_WIDTH - 120);
         g.drawCenteredString(font, netName, leftPos + GUI_WIDTH / 2, topPos + 6, COLOR_ACCENT);
 
         boolean isVisible = node.isRenderVisible();
@@ -289,6 +291,26 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
                 .map(SyncNetworkListPayload.NetworkEntry::name)
                 .findFirst()
                 .orElse("Network " + netId.toString().substring(0, 8));
+    }
+
+    private String clipToWidth(String text, int maxWidth) {
+        if (text == null)
+            return "";
+        if (maxWidth <= 0)
+            return "";
+        if (font.width(text) <= maxWidth)
+            return text;
+
+        String ellipsis = "...";
+        if (font.width(ellipsis) > maxWidth)
+            return "";
+
+        String value = text;
+        while (!value.isEmpty() && font.width(value + ellipsis) > maxWidth) {
+            value = value.substring(0, value.length() - 1);
+        }
+
+        return value.isEmpty() ? ellipsis : value + ellipsis;
     }
 
     private void drawChannelTabs(GuiGraphics g, LogisticsNodeEntity node, int y) {
@@ -331,7 +353,7 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
         drawSettingRow(g, rx, ry + rowH * 4, rowW, "Redstone", formatEnumName(ch.getRedstoneMode().name()), 0xFFFF5555,
                 mx, my, !isSettingDisabled(ch, 4));
         drawSettingRow(g, rx, ry + rowH * 5, rowW, "Distrib.", formatEnumName(ch.getDistributionMode().name()),
-                0xFFBB88FF, mx, my, true);
+                0xFFBB88FF, mx, my, !isSettingDisabled(ch, 5));
         drawSettingRow(g, rx, ry + rowH * 6, rowW, "Priority", editingRow == 6 ? "" : String.valueOf(ch.getPriority()),
                 0xFFFFDD44, mx, my, true);
         drawSettingRow(g, rx, ry + rowH * 7, rowW, "Batch", editingRow == 7 ? "" : formatBatchDisplay(ch), COLOR_WHITE,
@@ -400,15 +422,20 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
     }
 
     private boolean isSettingDisabled(ChannelData ch, int row) {
-        if (ch.getType() == ChannelType.ENERGY && row == 8)
-            return true;
-        return ch.getMode() == ChannelMode.IMPORT && row == 4;
+        if (ch.getMode() == ChannelMode.IMPORT) {
+            return row == 5 || row == 7 || row == 8;
+        }
+        return ch.getType() == ChannelType.ENERGY && row == 8;
     }
 
     @Override
     public boolean mouseClicked(double mx, double my, int btn) {
         if (editingRow != -1 && numericEditBox != null && !numericEditBox.isMouseOver(mx, my)) {
             stopNumericEdit(true);
+        }
+
+        if (isHoveringMenuSlot(mx, my)) {
+            return super.mouseClicked(mx, my, btn);
         }
 
         if (currentPage == Page.NETWORK_SELECT) {
@@ -422,7 +449,7 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
     }
 
     private boolean handleNetworkPageClick(double mx, double my) {
-        if (isHovering(leftPos + GUI_WIDTH / 2 - 45, topPos + 54, 90, 16, mx, my)) {
+        if (isHoveringAbs(leftPos + GUI_WIDTH / 2 - 45, topPos + 54, 90, 16, mx, my)) {
             String name = networkNameField.getValue().trim();
             if (name.isEmpty())
                 name = "Unnamed";
@@ -434,7 +461,7 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
         int endIdx = Math.min(networkScrollOffset + NETWORKS_PER_PAGE, networkList.size());
         for (int i = networkScrollOffset; i < endIdx; i++) {
             int y = listY + (i - networkScrollOffset) * 20;
-            if (isHovering(leftPos + 14, y, GUI_WIDTH - 28, 17, mx, my)) {
+            if (isHoveringAbs(leftPos + 14, y, GUI_WIDTH - 28, 17, mx, my)) {
                 sendNetworkAssign(Optional.of(networkList.get(i).id()), "");
                 return true;
             }
@@ -447,21 +474,21 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
         if (node == null)
             return false;
 
-        if (isHovering(leftPos + 8, topPos + 4, font.width(node.isRenderVisible() ? "Visible" : "Hidden") + 10, 12, mx,
+        if (isHoveringAbs(leftPos + 8, topPos + 4, font.width(node.isRenderVisible() ? "Visible" : "Hidden") + 10, 12, mx,
                 my)) {
             node.setRenderVisible(!node.isRenderVisible());
             PacketDistributor.sendToServer(new ToggleNodeVisibilityPayload(node.getId()));
             return true;
         }
 
-        if (isHovering(leftPos + GUI_WIDTH - 50, topPos + 4, 42, 12, mx, my)) {
+        if (isHoveringAbs(leftPos + GUI_WIDTH - 50, topPos + 4, 42, 12, mx, my)) {
             currentPage = Page.NETWORK_SELECT;
             rebuildPageLayout();
             return true;
         }
 
         for (int i = 0; i < 9; i++) {
-            if (isHovering(leftPos + 10 + i * 26, topPos + 20, 24, 14, mx, my)) {
+            if (isHoveringAbs(leftPos + 10 + i * 26, topPos + 20, 24, 14, mx, my)) {
                 selectedChannel = i;
                 getMenu().setSelectedChannel(i);
                 PacketDistributor.sendToServer(new SelectNodeChannelPayload(node.getId(), i));
@@ -484,7 +511,7 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
 
         for (int row = 0; row < 9; row++) {
             int y = startY + row * rowH;
-            if (isHovering(startX, y, w, rowH, mx, my)) {
+            if (isHoveringAbs(startX, y, w, rowH, mx, my)) {
                 if (isSettingDisabled(ch, row))
                     return true;
 
@@ -512,7 +539,7 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
         String modeLabel = ch.getFilterMode() == FilterMode.MATCH_ALL ? "All" : "Any";
         int modeBtnW = font.width(modeLabel) + 8;
 
-        if (isHovering(modeBtnX, modeBtnY, modeBtnW, 10, mx, my)) {
+        if (isHoveringAbs(modeBtnX, modeBtnY, modeBtnW, 10, mx, my)) {
             ch.setFilterMode(cycleEnum(ch.getFilterMode(), (btn == 0) ? 1 : -1));
             commitChannelUpdate(node, ch);
             return true;
@@ -642,25 +669,34 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
         }
     }
 
-    protected boolean isHovering(int x, int y, int w, int h, double mx, double my) {
+    private boolean isHoveringAbs(int x, int y, int w, int h, double mx, double my) {
         return mx >= x && mx <= x + w && my >= y && my <= y + h;
+    }
+
+    private boolean isHoveringMenuSlot(double mx, double my) {
+        for (Slot slot : menu.slots) {
+            if (isHovering(slot.x, slot.y, 16, 16, mx, my)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     public boolean keyPressed(int key, int scan, int modifiers) {
+        if (key == 256) {
+            return super.keyPressed(key, scan, modifiers);
+        }
+
         if (editingRow != -1) {
-            if (key == 256)
-                stopNumericEdit(false);
-            else if (key == 257 || key == 335)
+            if (key == 257 || key == 335)
                 stopNumericEdit(true);
             else
                 numericEditBox.keyPressed(key, scan, modifiers);
             return true;
         }
         if (networkNameField != null && networkNameField.isFocused()) {
-            if (key == 256)
-                networkNameField.setFocused(false);
-            else if (key == 257 || key == 335)
+            if (key == 257 || key == 335)
                 networkNameField.setFocused(false);
             else
                 networkNameField.keyPressed(key, scan, modifiers);

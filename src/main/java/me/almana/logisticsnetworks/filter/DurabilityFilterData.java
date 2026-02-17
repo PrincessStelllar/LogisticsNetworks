@@ -16,7 +16,7 @@ public final class DurabilityFilterData {
 
     private static final int DEFAULT_VALUE = 0;
     private static final int MIN_VALUE = 0;
-    private static final int MAX_VALUE = 9_999;
+    private static final int MAX_VALUE = 3000;
     private static final Operator DEFAULT_OPERATOR = Operator.GREATER_OR_EQUAL;
 
     public enum Operator {
@@ -118,6 +118,14 @@ public final class DurabilityFilterData {
             }
             writeRoot(customTag, root);
         });
+    }
+
+    public static int minValue() {
+        return MIN_VALUE;
+    }
+
+    public static int maxValue() {
+        return MAX_VALUE;
     }
 
     public static boolean matches(ItemStack filterStack, ItemStack candidate) {

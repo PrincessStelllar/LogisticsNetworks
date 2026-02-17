@@ -3,6 +3,7 @@ package me.almana.logisticsnetworks.network;
 import me.almana.logisticsnetworks.data.*;
 import me.almana.logisticsnetworks.entity.LogisticsNodeEntity;
 import me.almana.logisticsnetworks.filter.*;
+import me.almana.logisticsnetworks.item.WrenchItem;
 import me.almana.logisticsnetworks.menu.FilterMenu;
 import me.almana.logisticsnetworks.menu.NodeMenu;
 import me.almana.logisticsnetworks.registration.ModTags;
@@ -15,6 +16,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -115,6 +117,27 @@ public class ServerPayloadHandler {
         });
     }
 
+    public static void handleCycleWrenchMode(CycleWrenchModePayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player)) {
+                return;
+            }
+
+            InteractionHand hand = payload.handOrdinal() == InteractionHand.OFF_HAND.ordinal()
+                    ? InteractionHand.OFF_HAND
+                    : InteractionHand.MAIN_HAND;
+
+            ItemStack heldStack = player.getItemInHand(hand);
+            if (!(heldStack.getItem() instanceof WrenchItem)) {
+                return;
+            }
+
+            WrenchItem.Mode mode = WrenchItem.cycleMode(heldStack, payload.forward());
+            player.getInventory().setChanged();
+            player.displayClientMessage(WrenchItem.getModeChangedMessage(mode), true);
+        });
+    }
+
     public static void handleSetFilter(SetFilterPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             LogisticsNodeEntity node = getNode(context, payload.entityId());
@@ -170,13 +193,16 @@ public class ServerPayloadHandler {
 
     public static void handleModifyFilterTag(ModifyFilterTagPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
-            if (context.player().containerMenu instanceof FilterMenu menu && menu.isTagMode()) {
-                ItemStack filterStack = menu.getOpenedFilterStack((Player) context.player());
-                if (TagFilterData.isTagFilterItem(filterStack)) {
-                    boolean changed = payload.remove() ? TagFilterData.removeTagFilter(filterStack, payload.tag())
-                            : TagFilterData.addTagFilter(filterStack, payload.tag());
-                    if (changed)
+            Player player = (Player) context.player();
+            ItemStack filterStack = findOpenFilterStack(player, TagFilterData::isTagFilterItem);
+            if (TagFilterData.isTagFilterItem(filterStack)) {
+                boolean changed = payload.remove() ? TagFilterData.removeTagFilter(filterStack, payload.tag())
+                        : TagFilterData.addTagFilter(filterStack, payload.tag());
+                if (changed) {
+                    player.getInventory().setChanged();
+                    if (player.containerMenu instanceof FilterMenu menu && menu.isTagMode()) {
                         menu.broadcastChanges();
+                    }
                 }
             }
         });
@@ -184,13 +210,16 @@ public class ServerPayloadHandler {
 
     public static void handleModifyFilterMod(ModifyFilterModPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
-            if (context.player().containerMenu instanceof FilterMenu menu && menu.isModMode()) {
-                ItemStack filterStack = menu.getOpenedFilterStack((Player) context.player());
-                if (ModFilterData.isModFilter(filterStack)) {
-                    boolean changed = payload.remove() ? ModFilterData.removeModFilter(filterStack, payload.modId())
-                            : ModFilterData.addModFilter(filterStack, payload.modId());
-                    if (changed)
+            Player player = (Player) context.player();
+            ItemStack filterStack = findOpenFilterStack(player, ModFilterData::isModFilter);
+            if (ModFilterData.isModFilter(filterStack)) {
+                boolean changed = payload.remove() ? ModFilterData.removeModFilter(filterStack, payload.modId())
+                        : ModFilterData.setSingleModFilter(filterStack, payload.modId());
+                if (changed) {
+                    player.getInventory().setChanged();
+                    if (player.containerMenu instanceof FilterMenu menu && menu.isModMode()) {
                         menu.broadcastChanges();
+                    }
                 }
             }
         });
@@ -236,6 +265,18 @@ public class ServerPayloadHandler {
         });
     }
 
+    public static void handleSetSlotFilterSlots(SetSlotFilterSlotsPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (context.player().containerMenu instanceof FilterMenu menu && menu.isSlotMode()) {
+                boolean ok = menu.setSlotExpression((Player) context.player(), payload.expression());
+                if (!ok && context.player() instanceof ServerPlayer player) {
+                    player.displayClientMessage(
+                            Component.translatable("message.logisticsnetworks.filter.slot.invalid"), true);
+                }
+            }
+        });
+    }
+
     public static void handleSetFilterFluidEntry(SetFilterFluidEntryPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (context.player().containerMenu instanceof FilterMenu menu && !isSpecialMode(menu)) {
@@ -272,7 +313,28 @@ public class ServerPayloadHandler {
 
     private static boolean isSpecialMode(FilterMenu menu) {
         return menu.isTagMode() || menu.isAmountMode() || menu.isNbtMode() || menu.isDurabilityMode()
-                || menu.isModMode();
+                || menu.isModMode() || menu.isSlotMode();
+    }
+
+    private static ItemStack findOpenFilterStack(Player player, java.util.function.Predicate<ItemStack> matcher) {
+        if (player.containerMenu instanceof FilterMenu menu) {
+            ItemStack menuStack = menu.getOpenedFilterStack(player);
+            if (matcher.test(menuStack)) {
+                return menuStack;
+            }
+        }
+
+        ItemStack main = player.getMainHandItem();
+        if (matcher.test(main)) {
+            return main;
+        }
+
+        ItemStack off = player.getOffhandItem();
+        if (matcher.test(off)) {
+            return off;
+        }
+
+        return ItemStack.EMPTY;
     }
 
     private static void setChannelToUpgradeMax(LogisticsNodeEntity node, ChannelData channel) {
