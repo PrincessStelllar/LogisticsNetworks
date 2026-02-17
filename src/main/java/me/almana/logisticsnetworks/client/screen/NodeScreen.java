@@ -296,14 +296,21 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
     private String clipToWidth(String text, int maxWidth) {
         if (text == null)
             return "";
+        if (maxWidth <= 0)
+            return "";
         if (font.width(text) <= maxWidth)
             return text;
 
+        String ellipsis = "...";
+        if (font.width(ellipsis) > maxWidth)
+            return "";
+
         String value = text;
-        while (value.length() > 3 && font.width(value + "...") > maxWidth) {
+        while (!value.isEmpty() && font.width(value + ellipsis) > maxWidth) {
             value = value.substring(0, value.length() - 1);
         }
-        return value + "...";
+
+        return value.isEmpty() ? ellipsis : value + ellipsis;
     }
 
     private void drawChannelTabs(GuiGraphics g, LogisticsNodeEntity node, int y) {

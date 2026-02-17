@@ -399,7 +399,8 @@ public class FilterMenu extends AbstractContainerMenu {
         int delta = getDelta(id);
         if (delta != 0) {
             int current = data.get(0);
-            int next = Math.max(0, Math.min(100, current + delta));
+            int next = Math.max(DurabilityFilterData.minValue(),
+                    Math.min(DurabilityFilterData.maxValue(), current + delta));
             DurabilityFilterData.setValue(getOpenedStack(), next);
             data.set(0, next);
             broadcastChanges();
