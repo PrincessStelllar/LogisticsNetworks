@@ -16,7 +16,7 @@
     {
       "type": "patchouli:text",
       "title": "Copying Filters",
-      "text": "You can duplicate filter configs through crafting. Put one configured filter and one or more blank filters of the same type in the crafting grid. All blanks get the same config.$(br2)Put a single configured filter alone in the grid to clear it."
+      "text": "You can copy and clear filter data with crafting.$(br)$(li)Copy: put exactly one configured filter plus one or more blank filters of the same item. Output gives that config on all outputs.$(li)Clear: put one configured filter by itself. Output is one blank filter.$(br2)If you mix filter types, use more than one configured filter, or use only blank filters, the recipe will not work."
     }
   ]
 }

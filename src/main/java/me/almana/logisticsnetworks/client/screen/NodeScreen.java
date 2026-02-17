@@ -353,7 +353,7 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
         drawSettingRow(g, rx, ry + rowH * 4, rowW, "Redstone", formatEnumName(ch.getRedstoneMode().name()), 0xFFFF5555,
                 mx, my, !isSettingDisabled(ch, 4));
         drawSettingRow(g, rx, ry + rowH * 5, rowW, "Distrib.", formatEnumName(ch.getDistributionMode().name()),
-                0xFFBB88FF, mx, my, true);
+                0xFFBB88FF, mx, my, !isSettingDisabled(ch, 5));
         drawSettingRow(g, rx, ry + rowH * 6, rowW, "Priority", editingRow == 6 ? "" : String.valueOf(ch.getPriority()),
                 0xFFFFDD44, mx, my, true);
         drawSettingRow(g, rx, ry + rowH * 7, rowW, "Batch", editingRow == 7 ? "" : formatBatchDisplay(ch), COLOR_WHITE,
@@ -422,9 +422,10 @@ public class NodeScreen extends AbstractContainerScreen<NodeMenu> {
     }
 
     private boolean isSettingDisabled(ChannelData ch, int row) {
-        if (ch.getType() == ChannelType.ENERGY && row == 8)
-            return true;
-        return ch.getMode() == ChannelMode.IMPORT && row == 4;
+        if (ch.getMode() == ChannelMode.IMPORT) {
+            return row == 5 || row == 7 || row == 8;
+        }
+        return ch.getType() == ChannelType.ENERGY && row == 8;
     }
 
     @Override
